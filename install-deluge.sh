@@ -6,37 +6,18 @@ echo "================================="
 echo "Deluge Production Installer"
 echo "================================="
 
-# Detect existing Deluge
-if command -v deluge >/dev/null 2>&1; then
-    echo "Existing Deluge installation detected."
-    read -p "Do you want to remove it? (y/n): " CLEAN
-
-    if [ "$CLEAN" = "y" ]; then
-        echo "Cleaning old installation..."
-
-        pkill deluged 2>/dev/null || true
-        pkill deluge-web 2>/dev/null || true
-
-        rm -rf /usr/local/bin/deluge*
-        rm -rf /usr/local/lib/python*/dist-packages/deluge*
-        rm -rf /usr/local/lib/python*/dist-packages/libtorrent*
-        rm -rf ~/.config/deluge
-        rm -rf /root/.config/deluge
-    fi
-fi
-
 read -p "Enter the user that will run Deluge: " DELUGE_USER
 
 if id "$DELUGE_USER" >/dev/null 2>&1; then
     echo "User exists: $DELUGE_USER"
 else
-    echo "User does not exist."
-    read -p "Create user $DELUGE_USER ? (y/n): " CREATEUSER
+    echo "User does not exist"
+    read -p "Create user $DELUGE_USER ? (y/n): " CREATE
 
-    if [ "$CREATEUSER" = "y" ]; then
+    if [ "$CREATE" = "y" ]; then
         useradd -m "$DELUGE_USER"
     else
-        echo "Please create the user manually and rerun."
+        echo "Please create the user manually."
         exit 1
     fi
 fi
@@ -47,7 +28,7 @@ echo "Updating system..."
 apt update -y
 
 echo "Installing dependencies..."
-apt install -y python3 python3-pip git wget curl
+apt install -y python3 python3-pip wget curl
 
 echo "Allow pip system install..."
 pip3 config set global.break-system-packages true
@@ -64,13 +45,14 @@ echo "Creating plugin directory..."
 mkdir -p "$PLUGIN_DIR"
 
 echo "Downloading ltConfig plugin..."
-wget -O "$PLUGIN_DIR/ltConfig-2.0.0.egg" https://github.com/ratanakvlun/deluge-ltconfig/releases/download/v2.0.0/ltConfig-2.0.0.egg
+wget -O "$PLUGIN_DIR/ltConfig-2.0.0.egg" \
+https://github.com/ratanakvlun/deluge-ltconfig/releases/download/v2.0.0/ltConfig-2.0.0.egg
 
 chown -R "$DELUGE_USER:$DELUGE_USER" "$HOME_DIR/.config"
 
 echo "Creating systemd services..."
 
-cat <<EOT > /etc/systemd/system/deluged.service
+cat <<EOF > /etc/systemd/system/deluged.service
 [Unit]
 Description=Deluge Daemon
 After=network.target
@@ -82,9 +64,9 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOT
+EOF
 
-cat <<EOT > /etc/systemd/system/deluge-web.service
+cat <<EOF > /etc/systemd/system/deluge-web.service
 [Unit]
 Description=Deluge Web UI
 After=deluged.service
@@ -96,7 +78,7 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOT
+EOF
 
 systemctl daemon-reload
 systemctl enable deluged
@@ -104,30 +86,16 @@ systemctl enable deluge-web
 
 echo "Starting Deluge..."
 systemctl start deluged
-sleep 5
+
+echo "Waiting for daemon..."
+sleep 6
+
+echo "Starting Web UI..."
 systemctl start deluge-web
 
 echo "Enabling ltConfig plugin..."
 
-sudo -u "$DELUGE_USER" python3 - <<PY
-import json, os
-conf="$HOME_DIR/.config/deluge/core.conf"
-
-if os.path.exists(conf):
-    data=json.load(open(conf))
-else:
-    data={}
-
-plugins=data.get("enabled_plugins",[])
-
-if "ltConfig" not in plugins:
-    plugins.append("ltConfig")
-
-data["enabled_plugins"]=plugins
-
-json.dump(data,open(conf,"w"),indent=2)
-print("ltConfig enabled.")
-PY
+sudo -u "$DELUGE_USER" deluge-console "plugin -e ltConfig" || true
 
 systemctl restart deluged
 systemctl restart deluge-web
