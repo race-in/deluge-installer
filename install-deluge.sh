@@ -80,11 +80,19 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
+echo "Reloading systemd..."
 systemctl daemon-reload
-systemctl enable deluged
-systemctl enable deluge-web
 
-echo "Starting Deluge..."
+echo "Stopping any existing services..."
+systemctl stop deluged 2>/dev/null || true
+systemctl stop deluge-web 2>/dev/null || true
+systemctl stop deluged@$DELUGE_USER 2>/dev/null || true
+
+echo "Enabling services..."
+systemctl enable deluged >/dev/null 2>&1 || true
+systemctl enable deluge-web >/dev/null 2>&1 || true
+
+echo "Starting Deluge daemon..."
 systemctl start deluged
 
 echo "Waiting for daemon..."
@@ -94,8 +102,7 @@ echo "Starting Web UI..."
 systemctl start deluge-web
 
 echo "Enabling ltConfig plugin..."
-
-sudo -u "$DELUGE_USER" deluge-console "plugin -e ltConfig" || true
+sudo -u "$DELUGE_USER" deluge-console "plugin -e ltConfig" >/dev/null 2>&1 || true
 
 systemctl restart deluged
 systemctl restart deluge-web
