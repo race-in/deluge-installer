@@ -17,12 +17,14 @@ else
     if [ "$CREATE" = "y" ]; then
         useradd -m "$DELUGE_USER"
     else
-        echo "Create the user manually and rerun."
+        echo "Create the user manually."
         exit 1
     fi
 fi
 
 HOME_DIR=$(eval echo "~$DELUGE_USER")
+
+DOWNLOAD_DIR="$HOME_DIR/downloads"
 
 echo "Updating system..."
 apt update -y
@@ -39,9 +41,12 @@ pip3 install libtorrent
 echo "Installing Deluge..."
 pip3 install deluge
 
+echo "Creating download directory..."
+mkdir -p "$DOWNLOAD_DIR"
+chown -R "$DELUGE_USER:$DELUGE_USER" "$DOWNLOAD_DIR"
+
 PLUGIN_DIR="$HOME_DIR/.config/deluge/plugins"
 
-echo "Creating plugin directory..."
 mkdir -p "$PLUGIN_DIR"
 
 echo "Downloading ltConfig plugin..."
@@ -80,30 +85,26 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-echo "Reloading systemd..."
 systemctl daemon-reload
 
-echo "Stopping old services..."
-systemctl stop deluged 2>/dev/null || true
-systemctl stop deluge-web 2>/dev/null || true
+systemctl enable deluged
+systemctl enable deluge-web
 
-echo "Enabling services..."
-systemctl enable deluged >/dev/null 2>&1
-systemctl enable deluge-web >/dev/null 2>&1
-
-echo "Starting Deluge daemon..."
+echo "Starting Deluge..."
 systemctl start deluged
 
-echo "Waiting for daemon..."
 sleep 6
 
-echo "Starting Web UI..."
 systemctl start deluge-web
 
-echo "Enabling ltConfig plugin..."
-sudo -u "$DELUGE_USER" deluge-console "plugin -e ltConfig" >/dev/null 2>&1 || true
+echo "Configuring Deluge..."
 
-echo "Restarting services..."
+sudo -u "$DELUGE_USER" deluge-console <<EOF
+config -s download_location "$DOWNLOAD_DIR"
+plugin -e ltConfig
+exit
+EOF
+
 systemctl restart deluged
 systemctl restart deluge-web
 
@@ -111,10 +112,10 @@ IP=$(hostname -I | awk '{print $1}')
 
 echo ""
 echo "================================="
-echo "INSTALLATION COMPLETE"
+echo "INSTALL COMPLETE"
 echo "================================="
 echo ""
-echo "Deluge running as: $DELUGE_USER"
+echo "Download folder: $DOWNLOAD_DIR"
 echo "WebUI: http://$IP:8112"
 echo "Password: deluge"
 echo ""
