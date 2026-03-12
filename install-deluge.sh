@@ -11,13 +11,13 @@ read -p "Enter the user that will run Deluge: " DELUGE_USER
 if id "$DELUGE_USER" >/dev/null 2>&1; then
     echo "User exists: $DELUGE_USER"
 else
-    echo "User does not exist"
+    echo "User does not exist."
     read -p "Create user $DELUGE_USER ? (y/n): " CREATE
 
     if [ "$CREATE" = "y" ]; then
         useradd -m "$DELUGE_USER"
     else
-        echo "Please create the user manually."
+        echo "Create the user manually and rerun."
         exit 1
     fi
 fi
@@ -83,14 +83,13 @@ EOF
 echo "Reloading systemd..."
 systemctl daemon-reload
 
-echo "Stopping any existing services..."
+echo "Stopping old services..."
 systemctl stop deluged 2>/dev/null || true
 systemctl stop deluge-web 2>/dev/null || true
-systemctl stop deluged@$DELUGE_USER 2>/dev/null || true
 
 echo "Enabling services..."
-systemctl enable deluged >/dev/null 2>&1 || true
-systemctl enable deluge-web >/dev/null 2>&1 || true
+systemctl enable deluged >/dev/null 2>&1
+systemctl enable deluge-web >/dev/null 2>&1
 
 echo "Starting Deluge daemon..."
 systemctl start deluged
@@ -104,6 +103,7 @@ systemctl start deluge-web
 echo "Enabling ltConfig plugin..."
 sudo -u "$DELUGE_USER" deluge-console "plugin -e ltConfig" >/dev/null 2>&1 || true
 
+echo "Restarting services..."
 systemctl restart deluged
 systemctl restart deluge-web
 
